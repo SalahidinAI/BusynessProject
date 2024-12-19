@@ -1,5 +1,41 @@
 from rest_framework import serializers
 from .models import *
+from rest_framework_simplejwt.tokens import RefreshToken
+from django.contrib.auth import authenticate
+
+
+class UserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserProfile
+        fields = ('username', 'first_name', 'last_name',
+                  'age', 'email', 'phone', 'password', 'date_registered')
+        extra_kwargs = {'password': {'write_only': True}}
+
+    def create(self, validated_data):
+        user = UserProfile.objects.create_user(**validated_data)  # в начале это строка должна быть User. вместо UserProfile. чтобы не возникла ошибка
+        return user
+
+    def to_representation(self, instance): # если эту функцию написать то мы будем получать новый токен при каждом регистрации
+        refresh = RefreshToken.for_user(instance)
+        return {
+            'user': {
+                'username': instance.username,
+                'email': instance.email,
+            },
+            'access': str(refresh.access_token),
+            'refresh': str(refresh),
+        }
+
+
+class LoginSerializer(serializers.Serializer):
+    username = serializers.CharField()
+    password = serializers.CharField(write_only=True)
+
+    def validate(self, data):
+        user = authenticate(**data)
+        if user and user.is_active:
+            return user
+        raise serializers.ValidationError("Неверные учетные данные")
 
 
 class UserProfileSerializer(serializers.ModelSerializer):
@@ -7,13 +43,13 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = UserProfile
-        fields = '__all__'
+        fields = ['first_name', 'last_name']
 
 
 class GroupListSerializer(serializers.ModelSerializer):
-    # group_name = serializers.DateField(format('%d-%m-%Y'))
+    group_name = serializers.DateField(format('%d-%m-%Y'))
     get_count_products = serializers.SerializerMethodField()
-    get_count_available_sizes = serializers.SerializerMethodField()
+    get_count_sold_sizes = serializers.SerializerMethodField()
     get_count_all_sizes = serializers.SerializerMethodField()
     get_group_spend = serializers.SerializerMethodField()
     get_products_income = serializers.SerializerMethodField()
@@ -21,14 +57,14 @@ class GroupListSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Group
-        fields = ['group_name', 'get_count_products', 'get_count_available_sizes', 'get_count_all_sizes',
+        fields = ['group_name', 'get_count_products', 'get_count_sold_sizes', 'get_count_all_sizes',
                   'get_group_spend', 'get_products_income', 'get_products_profit'] # , 'get_quantity_products', 'created_date'
 
     def get_count_products(self, obj):
         return obj.get_count_products()
 
-    def get_count_available_sizes(self, obj):
-        return obj.get_count_available_sizes()
+    def get_count_sold_sizes(self, obj):
+        return obj.get_count_sold_sizes()
 
     def get_count_all_sizes(self, obj):
         return obj.get_count_all_sizes()
@@ -55,7 +91,7 @@ class ProductSizeDetailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ProductSize
-        fields = ['size', 'high_price', 'get_profit', 'sold_date']
+        fields = ['size', 'have', 'high_price', 'get_profit', 'sold_date']
 
     def get_profit(self, obj):
         return obj.get_profit()
@@ -82,6 +118,7 @@ class ProductListSerializer(serializers.ModelSerializer):
 
 
 class GroupDetailSerializer(serializers.ModelSerializer):
+    group_name = serializers.DateField(format('%d-%m-%Y'))
     products = ProductListSerializer(many=True, read_only=True)
 
     class Meta:

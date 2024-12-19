@@ -1,15 +1,15 @@
+from django.contrib.auth.models import AbstractUser
 from django.db import models
 from datetime import date
 from django.core.exceptions import ValidationError
+from phonenumber_field.modelfields import PhoneNumberField
+from django.core.validators import MinValueValidator, MaxValueValidator
 
 
-# from phonenumber_field.modelfields import PhoneNumberField
-
-
-class UserProfile(models.Model):
-    first_name = models.CharField(max_length=16)
-    last_name = models.CharField(max_length=16)
-    # phone = PhoneNumberField(null=True, blank=True, region='KG')
+class UserProfile(AbstractUser):
+    age = models.PositiveSmallIntegerField(default=0, null=True, blank=True,
+                                           validators=[MinValueValidator(18), MaxValueValidator(110)])
+    phone = PhoneNumberField(null=True, blank=True, region='KG')
     date_registered = models.DateTimeField(auto_now_add=True)
 
 
@@ -23,8 +23,8 @@ class Group(models.Model):
     def get_count_products(self):
         return self.products.count()
 
-    def get_count_available_sizes(self):
-        return ProductSize.objects.filter(product__group=self, have=True).count()
+    def get_count_sold_sizes(self):
+        return ProductSize.objects.filter(product__group=self, have=False).count()
 
     def get_count_all_sizes(self):
         return ProductSize.objects.filter(product__group=self).count()
@@ -45,6 +45,19 @@ class Group(models.Model):
         )
         return total
 
+    # def get_products_profit(self): # it is second code for get_products_profit
+    #     all_products = self.products.all()
+    #     total = sum(
+    #         size.high_price
+    #         for product in all_products
+    #         for size in product.sizes.filter(have=False)
+    #     )
+    #     spends = sum([i.sizes.count() * i.low_price for i in all_products])
+    #     result = total - spends
+    #     if result > 0:
+    #         return result
+    #     return 0
+
     def get_products_profit(self):
         all_products = self.products.all()
         total_profit = 0
@@ -62,7 +75,7 @@ class Product(models.Model):
     product_name = models.CharField(max_length=64)
     description = models.TextField(null=True, blank=True)
     low_price = models.PositiveSmallIntegerField()
-    article = models.CharField(max_length=50, unique=True)
+    article = models.CharField(max_length=50, null=True, blank=True)
     created_date = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -79,6 +92,16 @@ class Product(models.Model):
         if sold_sizes.exists():
             return sum(size.high_price for size in sold_sizes)  # убрал if size.high_price
         return 0
+
+    # def get_products_profit(self): # it is second code for get_products_profit
+    #     sold_sizes = self.sizes.filter(have=False)
+    #     all_income = sum(size.high_price for size in sold_sizes)
+    #     sizes = self.sizes.all()
+    #     all_spend = sizes.count() * self.low_price
+    #     result = all_income - all_spend
+    #     if result > 0:
+    #         return result
+    #     return 0
 
     def get_products_profit(self):
         sold_sizes = self.sizes.filter(have=False)
